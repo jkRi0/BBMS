@@ -98,6 +98,7 @@ $records = $stmt->fetchAll();
                         <th>Amount</th>
                         <th>Status</th>
                         <th>Session ID</th>
+                        <th>Location</th>
                         <th>Submitted At</th>
                     </tr>
                 </thead>
@@ -121,6 +122,28 @@ $records = $stmt->fetchAll();
                                 <small class="text-muted font-monospace session-id-cell"><?php echo htmlspecialchars($row['session_id'] ?? 'N/A'); ?></small>
                             </td>
                             <td>
+                                <?php
+                                    $lat = $row['latitude'] ?? null;
+                                    $lng = $row['longitude'] ?? null;
+                                    $hasLoc = ($lat !== null && $lat !== '' && $lng !== null && $lng !== '');
+                                    $label = $hasLoc ? (intval(round((float)$lat)) . ',' . intval(round((float)$lng))) : 'N/A';
+                                ?>
+                                <?php if ($hasLoc): ?>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-outline-success location-btn"
+                                        data-lat="<?php echo htmlspecialchars((string)$lat); ?>"
+                                        data-lng="<?php echo htmlspecialchars((string)$lng); ?>"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#locationModal"
+                                    >
+                                        <?php echo htmlspecialchars($label); ?>
+                                    </button>
+                                <?php else: ?>
+                                    <small class="text-muted">N/A</small>
+                                <?php endif; ?>
+                            </td>
+                            <td>
                                 <small class="text-muted">
                                     <?php echo $row['submitted_at'] ? date('M d, Y g:i A', strtotime($row['submitted_at'])) : 'N/A'; ?>
                                 </small>
@@ -129,11 +152,38 @@ $records = $stmt->fetchAll();
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">No records found for this employee.</td>
+                            <td colspan="6" class="text-center py-4 text-muted">No records found for this employee.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Location Modal -->
+<div class="modal fade" id="locationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-geo-alt-fill me-2 text-success"></i>Location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <div class="small text-muted">Exact Coordinates</div>
+                    <div class="fw-semibold" id="locationExact">-</div>
+                </div>
+                <iframe
+                    id="locationMapFrame"
+                    title="Map preview"
+                    width="100%"
+                    height="320"
+                    style="border: 1px solid #e5e7eb; border-radius: 12px;"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                ></iframe>
+            </div>
         </div>
     </div>
 </div>
@@ -143,6 +193,9 @@ $records = $stmt->fetchAll();
 const compareInput = document.getElementById('compareIdInput');
 const resultDiv = document.getElementById('compareResult');
 const sessionCells = document.querySelectorAll('.session-id-cell');
+
+const locationExactEl = document.getElementById('locationExact');
+const locationMapFrame = document.getElementById('locationMapFrame');
 
 function updateComparison() {
     const val = compareInput.value.trim();
@@ -177,6 +230,31 @@ function clearCompare() {
 }
 
 compareInput.addEventListener('input', updateComparison);
+
+// Location modal
+document.querySelectorAll('.location-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const lat = parseFloat(btn.getAttribute('data-lat'));
+        const lng = parseFloat(btn.getAttribute('data-lng'));
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+        if (locationExactEl) {
+            locationExactEl.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        }
+
+        if (locationMapFrame) {
+            const pad = 0.005;
+            const left = lng - pad;
+            const right = lng + pad;
+            const bottom = lat - pad;
+            const top = lat + pad;
+            const marker = `marker=${encodeURIComponent(lat + ',' + lng)}`;
+            const bbox = `bbox=${encodeURIComponent(left + ',' + bottom + ',' + right + ',' + top)}`;
+            locationMapFrame.src = `https://www.openstreetmap.org/export/embed.html?${bbox}&layer=mapnik&${marker}`;
+        }
+    });
+});
 </script>
 </body>
 </html>

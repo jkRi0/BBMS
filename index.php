@@ -16,7 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_profit'])) {
     $status = $_POST['status'] ?? 'Regular';
     $other_status_text = ($status == 'Others') ? ($_POST['other_status_text'] ?? '') : null;
 
+    $latitude = $_POST['latitude'] ?? '';
+    $longitude = $_POST['longitude'] ?? '';
+
     if (!empty($employee_id)) {
+        if ($latitude === '' || $longitude === '') {
+            $message = "<div class='alert alert-warning'>Please enable Location before submitting.</div>";
+        } else {
         try {
             // Normalize amount
             $normalized_amount = $profit_amount !== '' ? (float)$profit_amount : 0;
@@ -31,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_profit'])) {
 
             // Insert new record for today with accurate current time and session ID
             $dateTime = date('Y-m-d H:i:s');
-            $insertStmt = $pdo->prepare("INSERT INTO profits (employee_id, amount, profit_date, status, other_status_text, session_id) VALUES (?, ?, ?, ?, ?, ?)");
-            $insertStmt->execute([$employee_id, $normalized_amount, $dateTime, $status, $other_status_text, $session_id]);
+            $insertStmt = $pdo->prepare("INSERT INTO profits (employee_id, amount, profit_date, status, other_status_text, session_id, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $insertStmt->execute([$employee_id, $normalized_amount, $dateTime, $status, $other_status_text, $session_id, $latitude, $longitude]);
 
             // Redirect to avoid duplicate submissions on refresh (POST-Redirect-GET)
             header('Location: index.php?status=success');
@@ -40,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_profit'])) {
 
         } catch (PDOException $e) {
             $message = "<div class='alert alert-danger'>Error: " . $e->getMessage() . "</div>";
+        }
         }
     } else {
         $message = "<div class='alert alert-warning'>Please select an employee.</div>";
@@ -142,9 +149,8 @@ $employees = $pdo->query("SELECT id, name FROM employees ORDER BY name ASC")->fe
 <div class="container">
     <div class="card p-4">
         <h2 class="text-center mb-4">Daily Profit Entry</h2>
-        
+
         <form method="POST" action="">
-            
 
             <div class="mb-3">
                 <label for="employee_id" class="form-label"><b>Employee Name</b></label>
@@ -211,32 +217,77 @@ $employees = $pdo->query("SELECT id, name FROM employees ORDER BY name ASC")->fe
                 <button type="button" id="submitEntryBtn" class="btn btn-success btn-lg">Submit Entry</button>
             </div>
             <input type="hidden" name="submit_profit" value="1">
+            <input type="hidden" name="latitude" id="latitude" value="">
+            <input type="hidden" name="longitude" id="longitude" value="">
+            <input type="hidden" name="accuracy" id="accuracy" value="">
+            <input type="hidden" name="location_timestamp" id="location_timestamp" value="">
         </form>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-let hasCopiedSessionId = false;
-let lastCopiedSessionId = '';
+let isLocationReady = false;
 
-function updateSubmitLockState() {
+function setSubmitEnabled(enabled) {
     const submitEntryBtn = document.getElementById('submitEntryBtn');
     const finalSubmitBtn = document.getElementById('finalSubmitBtn');
-
-    const locked = !hasCopiedSessionId;
-    if (submitEntryBtn) submitEntryBtn.disabled = locked;
-    if (finalSubmitBtn) finalSubmitBtn.disabled = locked;
+    if (submitEntryBtn) submitEntryBtn.disabled = !enabled;
+    if (finalSubmitBtn) finalSubmitBtn.disabled = !enabled;
 }
 
-function markSessionIdDirty() {
-    const sessionIdInput = document.getElementById('sessionIdInput');
-    if (!sessionIdInput) return;
+function handleGeoError(err) {
+    let msg = 'Unable to get location.';
 
-    if (sessionIdInput.value !== lastCopiedSessionId) {
-        hasCopiedSessionId = false;
-        updateSubmitLockState();
+    if (err && typeof err.code === 'number') {
+        switch (err.code) {
+            case 1:
+                msg = 'Permission denied. Allow location access in your browser/site settings.';
+                break;
+            case 2:
+                msg = 'Position unavailable. Try enabling GPS/Wi‑Fi, then retry.';
+                break;
+            case 3:
+                msg = 'Request timed out. Please retry.';
+                break;
+        }
     }
+
+    isLocationReady = false;
+    setSubmitEnabled(false);
+    showToast(msg, 'warning');
+}
+
+function requestLocation() {
+    if (!('geolocation' in navigator)) {
+        handleGeoError({ code: 2 });
+        showToast('Geolocation is not supported by this browser.', 'warning');
+        return;
+    }
+
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+    };
+
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            const { latitude, longitude, accuracy } = pos.coords;
+
+            document.getElementById('latitude').value = latitude;
+            document.getElementById('longitude').value = longitude;
+            document.getElementById('accuracy').value = Number.isFinite(accuracy) ? accuracy : '';
+            document.getElementById('location_timestamp').value = String(pos.timestamp);
+
+            isLocationReady = true;
+            setSubmitEnabled(true);
+        },
+        (err) => {
+            handleGeoError(err);
+        },
+        options
+    );
 }
 
 function updateSessionIdWithDetails() {
@@ -244,6 +295,7 @@ function updateSessionIdWithDetails() {
     const statusRadio = document.querySelector('input[name="status"]:checked');
     const status = statusRadio ? statusRadio.value : '';
     const baseSessionId = "<?php echo htmlspecialchars($session_id); ?>";
+    
     const sessionIdInput = document.getElementById('sessionIdInput');
     
     let suffix = '';
@@ -266,7 +318,6 @@ function updateSessionIdWithDetails() {
     }
     
     sessionIdInput.value = baseSessionId + suffix;
-    markSessionIdDirty();
 }
 
 function copySessionId(e) {
@@ -279,10 +330,6 @@ function copySessionId(e) {
 
     navigator.clipboard.writeText(copyText.value)
         .then(() => {
-            hasCopiedSessionId = true;
-            lastCopiedSessionId = copyText.value;
-            updateSubmitLockState();
-
             btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
             btn.classList.replace('btn-outline-success', 'btn-success');
             setTimeout(() => {
@@ -291,8 +338,6 @@ function copySessionId(e) {
             }, 2000);
         })
         .catch(() => {
-            hasCopiedSessionId = false;
-            updateSubmitLockState();
             showToast('Copy failed. Please try again.', 'danger');
         });
 }
@@ -342,13 +387,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const finalSubmitBtn = document.getElementById('finalSubmitBtn');
     const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
 
-    updateSubmitLockState();
+    setSubmitEnabled(false);
+    requestLocation();
 
     // Handle initial button click to show modal
     if (submitEntryBtn) {
         submitEntryBtn.addEventListener('click', function(e) {
-            if (!hasCopiedSessionId) {
-                showToast('Please copy the Session ID before submitting.', 'warning');
+            if (!isLocationReady) {
+                showToast('Please enable Location first before submitting.', 'warning');
                 return;
             }
             if (mainForm.checkValidity()) {
@@ -362,8 +408,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle final submission from modal
     if (finalSubmitBtn) {
         finalSubmitBtn.addEventListener('click', function() {
-            if (!hasCopiedSessionId) {
-                showToast('Please copy the Session ID before submitting.', 'warning');
+            if (!isLocationReady) {
+                showToast('Please enable Location first before submitting.', 'warning');
                 return;
             }
             mainForm.submit();

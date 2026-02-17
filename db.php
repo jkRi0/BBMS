@@ -70,6 +70,13 @@ if (!in_array('other_status_text', $columns)) {
     $pdo->exec("ALTER TABLE profits ADD COLUMN other_status_text VARCHAR(255) DEFAULT NULL");
 }
 
+if (!in_array('latitude', $columns)) {
+    $pdo->exec("ALTER TABLE profits ADD COLUMN latitude DECIMAL(10,7) DEFAULT NULL");
+}
+if (!in_array('longitude', $columns)) {
+    $pdo->exec("ALTER TABLE profits ADD COLUMN longitude DECIMAL(10,7) DEFAULT NULL");
+}
+
 // Create admin table (for simple login)
 $sql = "CREATE TABLE IF NOT EXISTS admin (
     id INT(11) AUTO_INCREMENT PRIMARY KEY,
