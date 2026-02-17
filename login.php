@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <body>
 <div class="container login-container">
     <div class="card p-4">
-        <h3 class="text-center mb-4">Boss Login</h3>
+        <h3 class="text-center mb-4">Login</h3>
         <?php if ($error): ?>
             <div class="alert alert-danger"><?php echo $error; ?></div>
         <?php endif; ?>
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <input type="password" name="password" class="form-control" required>
             </div>
             <div class="d-grid">
-                <button type="submit" class="btn btn-primary">Login</button>
+                <button type="submit" class="btn btn-success">Login</button>
             </div>
         </form>
         <div class="text-center mt-3">

@@ -46,6 +46,30 @@ $sql = "CREATE TABLE IF NOT EXISTS profits (
 )";
 $conn->query($sql);
 
+// Global connection variable for other files
+$pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+$stmt = $pdo->query("DESCRIBE profits");
+$columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('profit_date', $columns)) {
+    $pdo->exec("ALTER TABLE profits ADD COLUMN profit_date DATE DEFAULT (CURRENT_DATE) AFTER employee_id");
+}
+if (!in_array('amount', $columns)) {
+    // Check if profit_amount exists and rename it if it does
+    if (in_array('profit_amount', $columns)) {
+        $pdo->exec("ALTER TABLE profits CHANGE COLUMN profit_amount amount DECIMAL(10,2) NOT NULL");
+    } else {
+        $pdo->exec("ALTER TABLE profits ADD COLUMN amount DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER profit_date");
+    }
+}
+if (!in_array('status', $columns)) {
+    $pdo->exec("ALTER TABLE profits ADD COLUMN status VARCHAR(50) DEFAULT 'Regular'");
+}
+if (!in_array('other_status_text', $columns)) {
+    $pdo->exec("ALTER TABLE profits ADD COLUMN other_status_text VARCHAR(255) DEFAULT NULL");
+}
+
 // Create admin table (for simple login)
 $sql = "CREATE TABLE IF NOT EXISTS admin (
     id INT(11) AUTO_INCREMENT PRIMARY KEY,
@@ -60,8 +84,4 @@ if ($checkAdmin->num_rows == 0) {
     $hashedPass = password_hash('admin123', PASSWORD_DEFAULT);
     $conn->query("INSERT INTO admin (username, password) VALUES ('admin', '$hashedPass')");
 }
-
-// Global connection variable for other files
-$pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 ?>

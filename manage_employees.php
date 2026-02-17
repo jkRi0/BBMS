@@ -72,6 +72,39 @@ $employees = $stmt->fetchAll();
 
 // Toggle order for the next click
 $next_order = ($order == 'ASC') ? 'DESC' : 'ASC';
+
+// Partial update for AJAX
+if (isset($_GET['ajax'])) {
+    ob_start();
+    if (count($employees) > 0): ?>
+        <?php foreach ($employees as $emp): ?>
+        <tr>
+            <td><?php echo $emp['id']; ?></td>
+            <td><?php echo htmlspecialchars($emp['name']); ?></td>
+            <td><?php echo htmlspecialchars($emp['assigned_place'] ?? 'Not Assigned'); ?></td>
+            <td class="action-cell">
+                <button class="btn btn-warning btn-sm edit-btn" 
+                        data-id="<?php echo $emp['id']; ?>" 
+                        data-name="<?php echo htmlspecialchars($emp['name']); ?>" 
+                        data-place="<?php echo htmlspecialchars($emp['assigned_place'] ?? ''); ?>"
+                        data-bs-toggle="modal" 
+                        data-bs-target="#editEmployeeModal">
+                    <i class="bi bi-pencil"></i> <span class="action-text">Edit</span>
+                </button>
+                <a href="?delete_emp=<?php echo $emp['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">
+                    <i class="bi bi-trash"></i> <span class="action-text">Delete</span>
+                </a>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <tr>
+            <td colspan="4" class="text-center">No employees found.</td>
+        </tr>
+    <?php endif;
+    echo ob_get_clean();
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -82,18 +115,36 @@ $next_order = ($order == 'ASC') ? 'DESC' : 'ASC';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        .sort-link { text-decoration: none; color: white; }
-        .sort-link:hover { text-decoration: underline; }
+        .sort-link { text-decoration: none; color: #155724; font-weight: bold; }
+        .sort-link:hover { text-decoration: underline; color: #0c391b; }
+        .action-text { display: inline; }
+        @media (max-width: 576px) {
+            .action-text { display: none; }
+            .btn-sm { padding: 0.25rem 0.4rem; }
+            .table td, .table th { font-size: 0.85rem; padding: 0.5rem 0.3rem; }
+            /* On mobile, make action cell a row with edit on the left and delete on the right */
+            .action-cell {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 0.25rem;
+            }
+        }
     </style>
 </head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container-fluid">
         <a class="navbar-brand" href="dashboard.php">BBMS Admin</a>
-        <div class="navbar-nav">
-            <a class="nav-link" href="dashboard.php">Dashboard</a>
-            <a class="nav-link active" href="manage_employees.php">Employees</a>
-            <a class="nav-link text-danger" href="logout.php">Logout</a>
+        <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="adminNavbar">
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="dashboard.php">Dashboard</a>
+                <a class="nav-link active" href="manage_employees.php">Employees</a>
+                <a class="nav-link text-white opacity-75" href="logout.php">Logout</a>
+            </div>
         </div>
     </div>
 </nav>
@@ -101,7 +152,7 @@ $next_order = ($order == 'ASC') ? 'DESC' : 'ASC';
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2>Manage Employees</h2>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
             <i class="bi bi-plus-lg"></i> Add Employee
         </button>
     </div>
@@ -122,44 +173,44 @@ $next_order = ($order == 'ASC') ? 'DESC' : 'ASC';
 
     <div class="table-responsive">
         <table class="table table-striped table-hover">
-            <thead class="table-dark">
+            <thead class="table-success text-dark">
                 <tr>
-                    <th>
-                        <a href="?search=<?php echo urlencode($search); ?>&sort=id&order=<?php echo ($sort == 'id') ? $next_order : 'ASC'; ?>" class="sort-link">
+                    <th class="text-dark">
+                        <a href="?search=<?php echo urlencode($search); ?>&sort=id&order=<?php echo ($sort == 'id') ? $next_order : 'ASC'; ?>" class="sort-link text-dark">
                             ID <?php echo ($sort == 'id') ? ($order == 'ASC' ? '↑' : '↓') : ''; ?>
                         </a>
                     </th>
-                    <th>
-                        <a href="?search=<?php echo urlencode($search); ?>&sort=name&order=<?php echo ($sort == 'name') ? $next_order : 'ASC'; ?>" class="sort-link">
+                    <th class="text-dark">
+                        <a href="?search=<?php echo urlencode($search); ?>&sort=name&order=<?php echo ($sort == 'name') ? $next_order : 'ASC'; ?>" class="sort-link text-dark">
                             Name <?php echo ($sort == 'name') ? ($order == 'ASC' ? '↑' : '↓') : ''; ?>
                         </a>
                     </th>
-                    <th>
-                        <a href="?search=<?php echo urlencode($search); ?>&sort=assigned_place&order=<?php echo ($sort == 'assigned_place') ? $next_order : 'ASC'; ?>" class="sort-link">
+                    <th class="text-dark">
+                        <a href="?search=<?php echo urlencode($search); ?>&sort=assigned_place&order=<?php echo ($sort == 'assigned_place') ? $next_order : 'ASC'; ?>" class="sort-link text-dark">
                             Assigned Place <?php echo ($sort == 'assigned_place') ? ($order == 'ASC' ? '↑' : '↓') : ''; ?>
                         </a>
                     </th>
-                    <th>Action</th>
+                    <th class="text-dark">Action</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="employee-table-body">
                 <?php if (count($employees) > 0): ?>
                     <?php foreach ($employees as $emp): ?>
                     <tr>
                         <td><?php echo $emp['id']; ?></td>
                         <td><?php echo htmlspecialchars($emp['name']); ?></td>
                         <td><?php echo htmlspecialchars($emp['assigned_place'] ?? 'Not Assigned'); ?></td>
-                        <td>
+                        <td class="action-cell">
                             <button class="btn btn-warning btn-sm edit-btn" 
                                     data-id="<?php echo $emp['id']; ?>" 
                                     data-name="<?php echo htmlspecialchars($emp['name']); ?>" 
                                     data-place="<?php echo htmlspecialchars($emp['assigned_place'] ?? ''); ?>"
                                     data-bs-toggle="modal" 
                                     data-bs-target="#editEmployeeModal">
-                                <i class="bi bi-pencil"></i> Edit
+                                <i class="bi bi-pencil"></i> <span class="action-text">Edit</span>
                             </button>
                             <a href="?delete_emp=<?php echo $emp['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">
-                                <i class="bi bi-trash"></i> Delete
+                                <i class="bi bi-trash"></i> <span class="action-text">Delete</span>
                             </a>
                         </td>
                     </tr>
@@ -195,7 +246,7 @@ $next_order = ($order == 'ASC') ? 'DESC' : 'ASC';
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" name="add_employee" class="btn btn-primary">Add Employee</button>
+                    <button type="submit" name="add_employee" class="btn btn-success">Save Employee</button>
                 </div>
             </form>
         </div>
@@ -233,13 +284,44 @@ $next_order = ($order == 'ASC') ? 'DESC' : 'ASC';
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-document.querySelectorAll('.edit-btn').forEach(button => {
-    button.addEventListener('click', function() {
-        document.getElementById('edit_id').value = this.dataset.id;
-        document.getElementById('edit_name').value = this.dataset.name;
-        document.getElementById('edit_place').value = this.dataset.place;
+// Function to re-bind edit button events after AJAX refresh
+function bindEditButtons() {
+    document.querySelectorAll('.edit-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            document.getElementById('edit_id').value = this.dataset.id;
+            document.getElementById('edit_name').value = this.dataset.name;
+            document.getElementById('edit_place').value = this.dataset.place;
+        });
     });
-});
+}
+
+// Initial binding
+bindEditButtons();
+
+const searchParam = '<?php echo urlencode($search); ?>';
+const sortParam = '<?php echo $sort; ?>';
+const orderParam = '<?php echo $order; ?>';
+
+function refreshEmployees() {
+    // Only refresh if no modal is open
+    const addModal = document.getElementById('addEmployeeModal');
+    const editModal = document.getElementById('editEmployeeModal');
+    if (addModal.classList.contains('show') || editModal.classList.contains('show')) return;
+
+    fetch(`manage_employees.php?search=${searchParam}&sort=${sortParam}&order=${orderParam}&ajax=1`)
+        .then(response => response.text())
+        .then(html => {
+            const tbody = document.getElementById('employee-table-body');
+            if (tbody.innerHTML !== html) {
+                tbody.innerHTML = html;
+                bindEditButtons(); // Re-bind events for new buttons
+            }
+        })
+        .catch(err => console.error('Employee refresh error:', err));
+}
+
+// Poll every 3 seconds
+setInterval(refreshEmployees, 3000);
 </script>
 </body>
 </html>
