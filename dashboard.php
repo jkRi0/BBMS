@@ -113,6 +113,72 @@ $next_year = $year;
 if ($next_month == 13) { $next_month = 1; $next_year++; }
 // AJAX Partial Update Logic
 if (isset($_GET['ajax'])) {
+    // Handle Admin Account Update via AJAX
+    if (isset($_GET['ajax']) && isset($_POST['update_admin_account'])) {
+        header('Content-Type: application/json');
+        $update_type = $_POST['update_type'] ?? ''; // 'username' or 'password'
+        $current_password = $_POST['current_password'] ?? '';
+        $current_admin_username = $_SESSION['admin_username'] ?? '';
+        $current_admin_id = $_SESSION['admin_id'] ?? null;
+
+        if (!$current_admin_id) {
+            echo json_encode(['success' => false, 'message' => 'Session expired. Please login again.']);
+            exit;
+        }
+
+        try {
+            // Verify current password first for ANY sensitive change
+            $stmt = $pdo->prepare("SELECT * FROM admin WHERE id = ?");
+            $stmt->execute([$current_admin_id]);
+            $admin = $stmt->fetch();
+
+            if (!$admin || !password_verify($current_password, $admin['password'])) {
+                echo json_encode(['success' => false, 'message' => 'Incorrect current password.']);
+                exit;
+            }
+
+            if ($update_type === 'username') {
+                $new_username = trim($_POST['admin_username'] ?? '');
+                if ($new_username === '') {
+                    echo json_encode(['success' => false, 'message' => 'Username cannot be empty.']);
+                    exit;
+                }
+                $stmt = $pdo->prepare("UPDATE admin SET username = ? WHERE id = ?");
+                $stmt->execute([$new_username, $current_admin_id]);
+                if ($stmt->rowCount() < 1) {
+                    echo json_encode(['success' => false, 'message' => 'No changes were saved.']);
+                    exit;
+                }
+                $_SESSION['admin_username'] = $new_username;
+                echo json_encode(['success' => true, 'message' => 'Username updated successfully!', 'username' => $new_username]);
+            } elseif ($update_type === 'password') {
+                $new_password = $_POST['admin_password'] ?? '';
+                $confirm_password = $_POST['confirm_password'] ?? '';
+                if (empty($new_password)) {
+                    echo json_encode(['success' => false, 'message' => 'New password cannot be empty.']);
+                    exit;
+                }
+                if ($new_password !== $confirm_password) {
+                    echo json_encode(['success' => false, 'message' => 'New passwords do not match.']);
+                    exit;
+                }
+                $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+                $stmt = $pdo->prepare("UPDATE admin SET password = ? WHERE id = ?");
+                $stmt->execute([$hashed_password, $current_admin_id]);
+                if ($stmt->rowCount() < 1) {
+                    echo json_encode(['success' => false, 'message' => 'No changes were saved.']);
+                    exit;
+                }
+                echo json_encode(['success' => true, 'message' => 'Password updated successfully!']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Invalid update type.']);
+            }
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
     if (isset($_GET['submissions'])) {
         ob_start();
         if (empty($submission_logs)): ?>
@@ -288,6 +354,9 @@ if (isset($_GET['ajax'])) {
         </button>
         <div class="collapse navbar-collapse" id="adminNavbar">
             <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#editAdminModal">
+                    <i class="bi bi-person-circle me-1"></i> <span id="header-admin-username"><?php echo htmlspecialchars(trim($_SESSION['admin_username'] ?? '') !== '' ? $_SESSION['admin_username'] : 'Admin'); ?></span>
+                </a>
                 <a class="nav-link active" href="dashboard.php">Dashboard</a>
                 <a class="nav-link" href="manage_employees.php">Employees</a>
                 <a class="nav-link text-white opacity-75" href="logout.php">Logout</a>
@@ -369,7 +438,7 @@ if (isset($_GET['ajax'])) {
         <div class="col-lg-4">
             <div class="card shadow h-100 border-0">
                 <div class="card-header bg-success text-white py-3">
-                    <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Submissions</h6>
+                    <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Submission Logs</h6>
                 </div>
                 <div class="card-body p-0" style="max-height: 420px; overflow-y: auto;">
                     <ul class="list-group list-group-flush small mb-0" id="submissions-log-list">
@@ -401,7 +470,7 @@ if (isset($_GET['ajax'])) {
     </div>
     
     <div class="mt-3 text-muted small">
-        <i class="bi bi-info-circle"></i> Click on any day to view the detailed weekly report for that period. Days highlighted in green have submitted data.
+        <!-- <i class="bi bi-info-circle"></i> Click on any day to view the detailed weekly report for that period. Days highlighted in green have submitted data. -->
     </div>
 
     <!-- Analytics Section -->
@@ -465,8 +534,135 @@ if (isset($_GET['ajax'])) {
     </div>
 </div>
 
+<!-- Edit Admin Account Modal -->
+<div class="modal fade" id="editAdminModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-person-gear me-2"></i>Edit Admin Account</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editAdminForm">
+                <div class="modal-body p-0">
+                    <!-- Nav Tabs -->
+                    <ul class="nav nav-tabs nav-justified" id="accountTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active py-3" id="username-tab" data-bs-toggle="tab" data-bs-target="#username-pane" type="button" role="tab" aria-selected="true">
+                                <i class="bi bi-person me-1"></i> Username
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link py-3" id="password-tab" data-bs-toggle="tab" data-bs-target="#password-pane" type="button" role="tab" aria-selected="false">
+                                <i class="bi bi-key me-1"></i> Password
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content p-4">
+                        <div id="adminUpdateAlert" class="alert d-none mb-3"></div>
+                        
+                        <input type="hidden" name="update_type" id="update_type" value="username">
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">Confirm Identity</label>
+                            <input type="password" name="current_password" id="current_password" class="form-control" placeholder="Enter current password" required>
+                        </div>
+
+                        <!-- Username Section -->
+                        <div class="tab-pane fade show active" id="username-pane" role="tabpanel" aria-labelledby="username-tab">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">New Username</label>
+                                <input type="text" name="admin_username" id="admin_username" class="form-control" value="<?php echo htmlspecialchars(trim($_SESSION['admin_username'] ?? '') !== '' ? $_SESSION['admin_username'] : 'Admin'); ?>">
+                            </div>
+                        </div>
+
+                        <!-- Password Section -->
+                        <div class="tab-pane fade" id="password-pane" role="tabpanel" aria-labelledby="password-tab">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">New Password</label>
+                                <input type="password" name="admin_password" id="admin_password" class="form-control" placeholder="Min. 6 characters">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">Confirm New Password</label>
+                                <input type="password" name="confirm_password" id="confirm_password" class="form-control" placeholder="Re-enter new password">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success px-4">Apply Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// Handle Tab Switching for Update Type
+document.getElementById('username-tab').addEventListener('click', () => {
+    document.getElementById('update_type').value = 'username';
+    document.getElementById('admin_username').required = true;
+    document.getElementById('admin_password').required = false;
+    document.getElementById('confirm_password').required = false;
+});
+document.getElementById('password-tab').addEventListener('click', () => {
+    document.getElementById('update_type').value = 'password';
+    document.getElementById('admin_username').required = false;
+    document.getElementById('admin_password').required = true;
+    document.getElementById('confirm_password').required = true;
+});
+
+// Handle Admin Account Update
+document.getElementById('editAdminForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    formData.append('update_admin_account', '1');
+    
+    const alertDiv = document.getElementById('adminUpdateAlert');
+    const saveBtn = this.querySelector('button[type="submit"]');
+    
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+    fetch('dashboard.php?ajax=1', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Changes';
+        
+        alertDiv.textContent = data.message;
+        alertDiv.classList.remove('d-none', 'alert-success', 'alert-danger');
+        alertDiv.classList.add(data.success ? 'alert-success' : 'alert-danger');
+        
+        if (data.success) {
+            if (typeof data.username === 'string' && data.username.trim() !== '') {
+                document.getElementById('header-admin-username').textContent = data.username;
+            }
+            setTimeout(() => {
+                const modalEl = document.getElementById('editAdminModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                alertDiv.classList.add('d-none');
+                document.getElementById('current_password').value = '';
+                document.getElementById('admin_password').value = '';
+                document.getElementById('confirm_password').value = '';
+            }, 1500);
+        }
+    })
+    .catch(err => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Changes';
+        alertDiv.textContent = 'An error occurred. Please try again.';
+        alertDiv.classList.remove('d-none', 'alert-success');
+        alertDiv.classList.add('alert-danger');
+    });
+});
+
 const currentYear = '<?php echo $year; ?>';
 const currentMonth = '<?php echo $month; ?>';
 // Track which rankings page is currently shown so auto-refresh doesn't jump back to page 1

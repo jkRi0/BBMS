@@ -99,11 +99,31 @@ $employees = $pdo->query("SELECT id, name FROM employees ORDER BY name ASC")->fe
             border-color: #ffecb5;
         }
         .toast-icon { font-size: 1.25rem; margin-right: 12px; }
+        
+        /* Modal Backdrop */
+        .modal-backdrop.show { opacity: 0.3; }
+        .modal-content { border-radius: 15px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
 
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content p-3 text-center">
+            <div class="modal-body">
+                <i class="bi bi-question-circle text-success mb-3" style="font-size: 3rem;"></i>
+                <h4 class="fw-bold mb-3">Confirm Submission?</h4>
+                <div class="d-grid gap-2 d-md-flex justify-content-center">
+                    <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="finalSubmitBtn" class="btn btn-success px-4">Yes, Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-success shadow-sm">
     <div class="container-fluid">
@@ -150,7 +170,7 @@ $employees = $pdo->query("SELECT id, name FROM employees ORDER BY name ASC")->fe
                 <label class="form-label"><b>Session ID</b></label>
                 <div class="input-group">
                     <input type="text" class="form-control bg-light" id="sessionIdInput" value="<?php echo htmlspecialchars($session_id); ?>" readonly>
-                    <button class="btn btn-outline-success" type="button" onclick="copySessionId()" title="Copy Session ID">
+                    <button class="btn btn-outline-success" type="button" onclick="copySessionId(event)" title="Copy Session ID">
                         <i class="bi bi-clipboard"></i> Copy
                     </button>
                 </div>
@@ -188,14 +208,37 @@ $employees = $pdo->query("SELECT id, name FROM employees ORDER BY name ASC")->fe
             </div>
             <br><br><br>
             <div class="d-grid">
-                <button type="submit" name="submit_profit" class="btn btn-success btn-lg">Submit Entry</button>
+                <button type="button" id="submitEntryBtn" class="btn btn-success btn-lg">Submit Entry</button>
             </div>
+            <input type="hidden" name="submit_profit" value="1">
         </form>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+let hasCopiedSessionId = false;
+let lastCopiedSessionId = '';
+
+function updateSubmitLockState() {
+    const submitEntryBtn = document.getElementById('submitEntryBtn');
+    const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+
+    const locked = !hasCopiedSessionId;
+    if (submitEntryBtn) submitEntryBtn.disabled = locked;
+    if (finalSubmitBtn) finalSubmitBtn.disabled = locked;
+}
+
+function markSessionIdDirty() {
+    const sessionIdInput = document.getElementById('sessionIdInput');
+    if (!sessionIdInput) return;
+
+    if (sessionIdInput.value !== lastCopiedSessionId) {
+        hasCopiedSessionId = false;
+        updateSubmitLockState();
+    }
+}
+
 function updateSessionIdWithDetails() {
     const amount = document.getElementById('profit_amount').value;
     const statusRadio = document.querySelector('input[name="status"]:checked');
@@ -223,23 +266,35 @@ function updateSessionIdWithDetails() {
     }
     
     sessionIdInput.value = baseSessionId + suffix;
+    markSessionIdDirty();
 }
 
-function copySessionId() {
+function copySessionId(e) {
     const copyText = document.getElementById("sessionIdInput");
     copyText.select();
     copyText.setSelectionRange(0, 99999); // For mobile devices
-    navigator.clipboard.writeText(copyText.value);
-    
-    // Feedback
-    const btn = event.currentTarget;
+
+    const btn = e.currentTarget;
     const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
-    btn.classList.replace('btn-outline-success', 'btn-success');
-    setTimeout(() => {
-        btn.innerHTML = originalHtml;
-        btn.classList.replace('btn-success', 'btn-outline-success');
-    }, 2000);
+
+    navigator.clipboard.writeText(copyText.value)
+        .then(() => {
+            hasCopiedSessionId = true;
+            lastCopiedSessionId = copyText.value;
+            updateSubmitLockState();
+
+            btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+            btn.classList.replace('btn-outline-success', 'btn-success');
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.replace('btn-success', 'btn-outline-success');
+            }, 2000);
+        })
+        .catch(() => {
+            hasCopiedSessionId = false;
+            updateSubmitLockState();
+            showToast('Copy failed. Please try again.', 'danger');
+        });
 }
 
 function toggleOtherInput() {
@@ -256,7 +311,6 @@ function toggleOtherInput() {
     }
 }
 
-// Toast functionality
 function showToast(message, type = 'success') {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -283,6 +337,39 @@ function showToast(message, type = 'success') {
 
 // Check for PHP message on load
 document.addEventListener('DOMContentLoaded', function() {
+    const mainForm = document.querySelector('form');
+    const submitEntryBtn = document.getElementById('submitEntryBtn');
+    const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+    updateSubmitLockState();
+
+    // Handle initial button click to show modal
+    if (submitEntryBtn) {
+        submitEntryBtn.addEventListener('click', function(e) {
+            if (!hasCopiedSessionId) {
+                showToast('Please copy the Session ID before submitting.', 'warning');
+                return;
+            }
+            if (mainForm.checkValidity()) {
+                confirmModal.show();
+            } else {
+                mainForm.reportValidity();
+            }
+        });
+    }
+
+    // Handle final submission from modal
+    if (finalSubmitBtn) {
+        finalSubmitBtn.addEventListener('click', function() {
+            if (!hasCopiedSessionId) {
+                showToast('Please copy the Session ID before submitting.', 'warning');
+                return;
+            }
+            mainForm.submit();
+        });
+    }
+
     <?php if ($message): 
         $msgText = strip_tags($message);
         $type = 'success';

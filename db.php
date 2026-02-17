@@ -78,9 +78,11 @@ $sql = "CREATE TABLE IF NOT EXISTS admin (
 )";
 $conn->query($sql);
 
-// Check if admin exists, if not create one (default: admin/admin123)
-$checkAdmin = $conn->query("SELECT id FROM admin WHERE username = 'admin'");
-if ($checkAdmin->num_rows == 0) {
+// Seed default admin ONLY if table is empty (default: admin/admin123)
+$checkAdmin = $conn->query("SELECT COUNT(*) AS cnt FROM admin");
+$row = $checkAdmin ? $checkAdmin->fetch_assoc() : null;
+$adminCount = $row ? (int)$row['cnt'] : 0;
+if ($adminCount === 0) {
     $hashedPass = password_hash('admin123', PASSWORD_DEFAULT);
     $conn->query("INSERT INTO admin (username, password) VALUES ('admin', '$hashedPass')");
 }

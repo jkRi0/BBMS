@@ -83,6 +83,9 @@ if (isset($_GET['ajax'])) {
             <td><?php echo htmlspecialchars($emp['name']); ?></td>
             <td><?php echo htmlspecialchars($emp['assigned_place'] ?? 'Not Assigned'); ?></td>
             <td class="action-cell">
+                <a href="view_employee_records.php?id=<?php echo $emp['id']; ?>" class="btn btn-info btn-sm text-white">
+                    <i class="bi bi-eye"></i> <span class="action-text">View</span>
+                </a>
                 <button class="btn btn-warning btn-sm edit-btn" 
                         data-id="<?php echo $emp['id']; ?>" 
                         data-name="<?php echo htmlspecialchars($emp['name']); ?>" 
@@ -141,6 +144,9 @@ if (isset($_GET['ajax'])) {
         </button>
         <div class="collapse navbar-collapse" id="adminNavbar">
             <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#editAdminModal">
+                    <i class="bi bi-person-circle me-1"></i> <span id="header-admin-username"><?php echo htmlspecialchars(trim($_SESSION['admin_username'] ?? '') !== '' ? $_SESSION['admin_username'] : 'Admin'); ?></span>
+                </a>
                 <a class="nav-link" href="dashboard.php">Dashboard</a>
                 <a class="nav-link active" href="manage_employees.php">Employees</a>
                 <a class="nav-link text-white opacity-75" href="logout.php">Logout</a>
@@ -190,7 +196,7 @@ if (isset($_GET['ajax'])) {
                             Assigned Place <?php echo ($sort == 'assigned_place') ? ($order == 'ASC' ? '↑' : '↓') : ''; ?>
                         </a>
                     </th>
-                    <th class="text-dark">Action</th>
+                    <th class="text-dark">Actions</th>
                 </tr>
             </thead>
             <tbody id="employee-table-body">
@@ -201,6 +207,9 @@ if (isset($_GET['ajax'])) {
                         <td><?php echo htmlspecialchars($emp['name']); ?></td>
                         <td><?php echo htmlspecialchars($emp['assigned_place'] ?? 'Not Assigned'); ?></td>
                         <td class="action-cell">
+                            <a href="view_employee_records.php?id=<?php echo $emp['id']; ?>" class="btn btn-info btn-sm text-white">
+                                <i class="bi bi-eye"></i> <span class="action-text">View</span>
+                            </a>
                             <button class="btn btn-warning btn-sm edit-btn" 
                                     data-id="<?php echo $emp['id']; ?>" 
                                     data-name="<?php echo htmlspecialchars($emp['name']); ?>" 
@@ -282,8 +291,131 @@ if (isset($_GET['ajax'])) {
     </div>
 </div>
 
+<!-- Edit Admin Account Modal -->
+<div class="modal fade" id="editAdminModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-person-gear me-2"></i>Edit Admin Account</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editAdminForm">
+                <div class="modal-body p-0">
+                    <ul class="nav nav-tabs nav-justified" id="accountTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active py-3" id="username-tab" data-bs-toggle="tab" data-bs-target="#username-pane" type="button" role="tab" aria-selected="true">
+                                <i class="bi bi-person me-1"></i> Username
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link py-3" id="password-tab" data-bs-toggle="tab" data-bs-target="#password-pane" type="button" role="tab" aria-selected="false">
+                                <i class="bi bi-key me-1"></i> Password
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content p-4">
+                        <div id="adminUpdateAlert" class="alert d-none mb-3"></div>
+                        <input type="hidden" name="update_type" id="update_type" value="username">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">Confirm Identity</label>
+                            <input type="password" name="current_password" id="current_password" class="form-control" placeholder="Enter current password" required>
+                        </div>
+
+                        <div class="tab-pane fade show active" id="username-pane" role="tabpanel" aria-labelledby="username-tab">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">New Username</label>
+                                <input type="text" name="admin_username" id="admin_username" class="form-control" value="<?php echo htmlspecialchars(trim($_SESSION['admin_username'] ?? '') !== '' ? $_SESSION['admin_username'] : 'Admin'); ?>">
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="password-pane" role="tabpanel" aria-labelledby="password-tab">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">New Password</label>
+                                <input type="password" name="admin_password" id="admin_password" class="form-control" placeholder="Min. 6 characters">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-dark">Confirm New Password</label>
+                                <input type="password" name="confirm_password" id="confirm_password" class="form-control" placeholder="Re-enter new password">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success px-4">Apply Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// Handle Tab Switching for Update Type
+document.getElementById('username-tab').addEventListener('click', () => {
+    document.getElementById('update_type').value = 'username';
+    document.getElementById('admin_username').required = true;
+    document.getElementById('admin_password').required = false;
+    document.getElementById('confirm_password').required = false;
+});
+document.getElementById('password-tab').addEventListener('click', () => {
+    document.getElementById('update_type').value = 'password';
+    document.getElementById('admin_username').required = false;
+    document.getElementById('admin_password').required = true;
+    document.getElementById('confirm_password').required = true;
+});
+
+// Handle Admin Account Update
+document.getElementById('editAdminForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    formData.append('update_admin_account', '1');
+
+    const alertDiv = document.getElementById('adminUpdateAlert');
+    const saveBtn = this.querySelector('button[type="submit"]');
+
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+    fetch('dashboard.php?ajax=1', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Apply Update';
+
+        alertDiv.textContent = data.message;
+        alertDiv.classList.remove('d-none', 'alert-success', 'alert-danger');
+        alertDiv.classList.add(data.success ? 'alert-success' : 'alert-danger');
+
+        if (data.success) {
+            if (data.username) {
+                document.getElementById('header-admin-username').textContent = data.username;
+            }
+            setTimeout(() => {
+                const modalEl = document.getElementById('editAdminModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                alertDiv.classList.add('d-none');
+                document.getElementById('current_password').value = '';
+                document.getElementById('admin_password').value = '';
+                document.getElementById('confirm_password').value = '';
+            }, 1200);
+        }
+    })
+    .catch(() => {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Apply Update';
+        alertDiv.textContent = 'An error occurred. Please try again.';
+        alertDiv.classList.remove('d-none', 'alert-success');
+        alertDiv.classList.add('alert-danger');
+    });
+});
+
 // Function to re-bind edit button events after AJAX refresh
 function bindEditButtons() {
     document.querySelectorAll('.edit-btn').forEach(button => {
