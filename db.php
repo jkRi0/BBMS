@@ -1,4 +1,9 @@
 <?php
+$tz = 'Asia/Manila';
+if (function_exists('date_default_timezone_set')) {
+    date_default_timezone_set($tz);
+}
+
 $host = 'localhost';
 $user = 'root';
 $pass = '';
@@ -19,6 +24,9 @@ if ($conn->query($sql) === TRUE) {
 } else {
     die("Error creating database: " . $conn->error);
 }
+
+// Align MySQL session timezone with PHP/local timezone
+$conn->query("SET time_zone = '+08:00'");
 
 // Create employees table
 $sql = "CREATE TABLE IF NOT EXISTS employees (
@@ -49,6 +57,9 @@ $conn->query($sql);
 // Global connection variable for other files
 $pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+// Align MySQL session timezone with PHP/local timezone
+$pdo->exec("SET time_zone = '+08:00'");
 
 $stmt = $pdo->query("DESCRIBE profits");
 $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);

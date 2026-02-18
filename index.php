@@ -228,6 +228,9 @@ $employees = $pdo->query("SELECT id, name FROM employees ORDER BY name ASC")->fe
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 let isLocationReady = false;
+let geoRecheckIntervalId = null;
+let geoRecheckStopTimeoutId = null;
+let pendingSubmitAfterLocation = false;
 
 function setSubmitEnabled(enabled) {
     const submitEntryBtn = document.getElementById('submitEntryBtn');
@@ -259,6 +262,12 @@ function handleGeoError(err) {
 }
 
 function requestLocation() {
+    if (window.isSecureContext !== true) {
+        handleGeoError({ code: 1 });
+        showToast('Location requires HTTPS (or localhost).', 'warning');
+        return;
+    }
+
     if (!('geolocation' in navigator)) {
         handleGeoError({ code: 2 });
         showToast('Geolocation is not supported by this browser.', 'warning');
@@ -282,12 +291,50 @@ function requestLocation() {
 
             isLocationReady = true;
             setSubmitEnabled(true);
+
+            if (pendingSubmitAfterLocation) {
+                pendingSubmitAfterLocation = false;
+                const confirmModalEl = document.getElementById('confirmModal');
+                if (confirmModalEl) {
+                    const confirmModal = bootstrap.Modal.getOrCreateInstance(confirmModalEl);
+                    confirmModal.show();
+                }
+            }
+
+            stopGeoRecheck();
         },
         (err) => {
             handleGeoError(err);
         },
         options
     );
+}
+
+function startGeoRecheck(ms = 15000) {
+    if (geoRecheckIntervalId !== null) return;
+
+    geoRecheckIntervalId = setInterval(() => {
+        if (isLocationReady) {
+            stopGeoRecheck();
+            return;
+        }
+        requestLocation();
+    }, 2000);
+
+    geoRecheckStopTimeoutId = setTimeout(() => {
+        stopGeoRecheck();
+    }, ms);
+}
+
+function stopGeoRecheck() {
+    if (geoRecheckIntervalId !== null) {
+        clearInterval(geoRecheckIntervalId);
+        geoRecheckIntervalId = null;
+    }
+    if (geoRecheckStopTimeoutId !== null) {
+        clearTimeout(geoRecheckStopTimeoutId);
+        geoRecheckStopTimeoutId = null;
+    }
 }
 
 function updateSessionIdWithDetails() {
@@ -389,12 +436,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     setSubmitEnabled(false);
     requestLocation();
+    startGeoRecheck(15000);
+
+    // When you return from browser site settings (after enabling Location), retry automatically.
+    window.addEventListener('focus', () => {
+        if (!isLocationReady) startGeoRecheck(15000);
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && !isLocationReady) {
+            startGeoRecheck(15000);
+        }
+    });
 
     // Handle initial button click to show modal
     if (submitEntryBtn) {
         submitEntryBtn.addEventListener('click', function(e) {
             if (!isLocationReady) {
                 showToast('Please enable Location first before submitting.', 'warning');
+                pendingSubmitAfterLocation = true;
+                startGeoRecheck(15000);
                 return;
             }
             if (mainForm.checkValidity()) {
@@ -410,6 +470,8 @@ document.addEventListener('DOMContentLoaded', function() {
         finalSubmitBtn.addEventListener('click', function() {
             if (!isLocationReady) {
                 showToast('Please enable Location first before submitting.', 'warning');
+                pendingSubmitAfterLocation = true;
+                startGeoRecheck(15000);
                 return;
             }
             mainForm.submit();
