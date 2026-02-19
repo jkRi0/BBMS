@@ -21,26 +21,7 @@ $active_days = $stmt->fetchAll(PDO::FETCH_COLUMN);
 $month_start = "$year-$month-01";
 $month_end = date('Y-m-t', strtotime($month_start));
 
-// Pagination for rankings (5 per page)
-$rank_per_page = 5;
-$rank_page = isset($_GET['rank_page']) ? max(1, (int)$_GET['rank_page']) : 1;
-
-// Total employees with profit this month
-$count_stmt = $pdo->prepare("
-    SELECT COUNT(DISTINCT e.id)
-    FROM employees e
-    JOIN profits p ON e.id = p.employee_id
-    WHERE p.profit_date BETWEEN :start AND :end
-");
-$count_stmt->execute([':start' => $month_start, ':end' => $month_end]);
-$total_rank_emps = (int)$count_stmt->fetchColumn();
-$total_rank_pages = $total_rank_emps > 0 ? (int)ceil($total_rank_emps / $rank_per_page) : 1;
-if ($rank_page > $total_rank_pages) {
-    $rank_page = $total_rank_pages;
-}
-$rank_offset = ($rank_page - 1) * $rank_per_page;
-
-// Ranking data (current page)
+// Ranking data (full month)
 $stmt = $pdo->prepare("
     SELECT e.name, SUM(p.amount) as total_profit
     FROM employees e
@@ -48,12 +29,10 @@ $stmt = $pdo->prepare("
     WHERE p.profit_date BETWEEN :start AND :end
     GROUP BY e.id
     ORDER BY total_profit DESC
-    LIMIT :limit OFFSET :offset
+
 ");
 $stmt->bindValue(':start', $month_start);
 $stmt->bindValue(':end', $month_end);
-$stmt->bindValue(':limit', $rank_per_page, PDO::PARAM_INT);
-$stmt->bindValue(':offset', $rank_offset, PDO::PARAM_INT);
 $stmt->execute();
 $ranking_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -208,24 +187,28 @@ if (isset($_GET['ajax'])) {
     
     if (isset($_GET['ranking'])) {
         ob_start();
-        if (empty($ranking_data)): ?>
-            <li class="list-group-item text-center py-4 text-muted">No data available for this month</li>
-        <?php else: ?>
-            <?php foreach ($ranking_data as $index => $rank): ?>
-                <?php $globalRank = $rank_offset + $index + 1; ?>
-                <li class="list-group-item d-flex justify-content-between align-items-center py-3">
-                    <div class="d-flex align-items-center">
-                        <span class="badge <?php 
-                            echo $globalRank == 1 ? 'bg-warning' : ($globalRank == 2 ? 'bg-secondary-subtle text-dark' : ($globalRank == 3 ? 'bg-danger-subtle text-dark' : 'bg-light text-dark border')); 
-                        ?> rounded-circle me-3" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
-                            <?php echo $globalRank; ?>
-                        </span>
-                        <span class="fw-bold"><?php echo htmlspecialchars($rank['name']); ?></span>
-                    </div>
-                    <span class="text-success fw-bold">₱<?php echo number_format($rank['total_profit'], 0); ?></span>
-                </li>
-            <?php endforeach; ?>
-        <?php endif;
+        ?>
+        <ul class="list-group list-group-flush" id="ranking-list">
+            <?php if (empty($ranking_data)): ?>
+                <li class="list-group-item text-center py-4 text-muted">No data available for this month</li>
+            <?php else: ?>
+                <?php foreach ($ranking_data as $index => $rank): ?>
+                    <?php $globalRank = $index + 1; ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                        <div class="d-flex align-items-center">
+                            <span class="badge <?php 
+                                echo $globalRank == 1 ? 'bg-warning' : ($globalRank == 2 ? 'bg-secondary-subtle text-dark' : ($globalRank == 3 ? 'bg-danger-subtle text-dark' : 'bg-light text-dark border')); 
+                            ?> rounded-circle me-3" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+                                <?php echo $globalRank; ?>
+                            </span>
+                            <span class="fw-bold"><?php echo htmlspecialchars($rank['name']); ?></span>
+                        </div>
+                        <span class="text-success fw-bold">₱<?php echo number_format($rank['total_profit'], 0); ?></span>
+                    </li>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </ul>
+        <?php
         echo ob_get_clean();
         exit;
     }
@@ -335,7 +318,8 @@ if (isset($_GET['ajax'])) {
         }
 
         .ranking-container {
-            /* No internal scroll; card will grow just enough for 5 items */
+            max-height: 420px;
+            overflow-y: auto;
         }
         
         @media (max-width: 768px) {
@@ -500,7 +484,7 @@ if (isset($_GET['ajax'])) {
                                 <li class="list-group-item text-center py-4 text-muted">No data available for this month</li>
                             <?php else: ?>
                             <?php foreach ($ranking_data as $index => $rank): ?>
-                                <?php $globalRank = $rank_offset + $index + 1; ?>
+                                <?php $globalRank = $index + 1; ?>
                                 <li class="list-group-item d-flex justify-content-between align-items-center py-3">
                                     <div class="d-flex align-items-center">
                                         <span class="badge <?php 
@@ -516,18 +500,7 @@ if (isset($_GET['ajax'])) {
                             <?php endif; ?>
                         </ul>
                     </div>
-                    <?php if ($total_rank_pages > 1): ?>
-                        <div class="border-top small d-flex justify-content-between align-items-center px-3 py-2"
-                             id="ranking-pagination"
-                             data-current-page="<?php echo $rank_page; ?>"
-                             data-total-pages="<?php echo $total_rank_pages; ?>">
-                            <span>Page <?php echo $rank_page; ?> of <?php echo $total_rank_pages; ?></span>
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Ranking pagination">
-                                <a href="?year=<?php echo $year; ?>&month=<?php echo $month; ?>&rank_page=<?php echo max(1, $rank_page - 1); ?>" class="btn btn-outline-secondary <?php echo $rank_page <= 1 ? 'disabled' : ''; ?>">Prev</a>
-                                <a href="?year=<?php echo $year; ?>&month=<?php echo $month; ?>&rank_page=<?php echo min($total_rank_pages, $rank_page + 1); ?>" class="btn btn-outline-secondary <?php echo $rank_page >= $total_rank_pages ? 'disabled' : ''; ?>">Next</a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+                    
                 </div>
             </div>
         </div>
@@ -665,8 +638,6 @@ document.getElementById('editAdminForm').addEventListener('submit', function(e) 
 
 const currentYear = '<?php echo $year; ?>';
 const currentMonth = '<?php echo $month; ?>';
-// Track which rankings page is currently shown so auto-refresh doesn't jump back to page 1
-let currentRankPage = <?php echo $rank_page; ?>;
 
 // Chart Initialization
 let monthlyChart;
@@ -749,16 +720,8 @@ function refreshData() {
         })
         .catch(err => console.error('Submissions refresh error:', err));
 
-    // 3. Refresh Ranking (stay on the same pagination page)
-    const paginationEl = document.getElementById('ranking-pagination');
-    if (paginationEl) {
-        const pageAttr = paginationEl.getAttribute('data-current-page');
-        if (pageAttr) {
-            currentRankPage = parseInt(pageAttr, 10) || 1;
-        }
-    }
-
-    fetch(`dashboard.php?year=${currentYear}&month=${currentMonth}&ajax=1&ranking=1&rank_page=${currentRankPage}`)
+    // 3. Refresh Ranking
+    fetch(`dashboard.php?year=${currentYear}&month=${currentMonth}&ajax=1&ranking=1`)
         .then(response => response.text())
         .then(html => {
             const container = document.getElementById('ranking-list');

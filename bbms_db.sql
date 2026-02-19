@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 17, 2026 at 11:18 PM
+-- Generation Time: Feb 18, 2026 at 02:08 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -107,12 +107,15 @@ INSERT INTO `profits` (`id`, `employee_id`, `profit_date`, `amount`, `is_trainin
 (338, 8, '2026-02-17', 1000.00, 0, '2026-02-17 10:27:26', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
 (342, 15, '2026-02-17', 12345.00, 0, '2026-02-17 10:48:08', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
 (344, 5, '2026-02-16', 100.00, 0, '2026-02-17 10:57:52', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', 14.2668364, 121.1554307),
-(345, 5, '2026-02-18', 999.00, 0, '2026-02-17 10:58:14', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1u', 14.2668364, 121.1554307),
 (346, 5, '2026-02-19', 69.00, 0, '2026-02-17 11:02:12', 'Regular', NULL, NULL, NULL, NULL),
-(347, 3, '2026-02-17', 50000.00, 0, '2026-02-17 11:49:02', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
+(347, 3, '2026-02-17', 100.00, 0, '2026-02-17 11:49:02', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
 (348, 13, '2026-02-17', 15.00, 0, '2026-02-17 11:55:25', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
 (350, 7, '2026-02-17', 111.00, 0, '2026-02-17 14:00:07', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2668364, 121.1554307),
-(352, 5, '2026-02-17', 100.00, 0, '2026-02-17 14:16:57', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2667594, 121.1554445);
+(354, 5, '2026-02-17', 50.00, 0, '2026-02-17 22:50:02', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2668541, 121.1554532),
+(358, 5, '2026-02-18', 10.00, 0, '2026-02-18 00:06:39', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', NULL, NULL),
+(361, 7, '2026-02-18', 10000.00, 0, '2026-02-18 00:27:43', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2535972, 121.1400728),
+(362, 1, '2026-02-18', 900.00, 0, '2026-02-18 00:45:17', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2535943, 121.1400720),
+(363, 4, '2026-02-18', 5000.00, 0, '2026-02-18 00:58:04', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2536003, 121.1400774);
 
 --
 -- Indexes for dumped tables
@@ -158,7 +161,7 @@ ALTER TABLE `employees`
 -- AUTO_INCREMENT for table `profits`
 --
 ALTER TABLE `profits`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=353;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=364;
 
 --
 -- Constraints for dumped tables
