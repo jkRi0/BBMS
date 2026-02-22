@@ -135,6 +135,8 @@ if (isset($_GET['ajax'])) {
                             data-employee-id="<?php echo $emp_id; ?>" 
                             data-date="<?php echo $current_date_obj; ?>"
                             data-current-amount="<?php echo $day['amount']; ?>"
+                            data-current-status="<?php echo htmlspecialchars($day['status']); ?>"
+                            data-current-other="<?php echo htmlspecialchars($day['other_text'] ?? ''); ?>"
                             onclick="makeEditable(this)">
                             <?php echo $display; ?>
                         </td>
@@ -313,6 +315,8 @@ if (isset($_GET['ajax'])) {
                                     data-employee-id="<?php echo $emp_id; ?>" 
                                     data-date="<?php echo $current_date_obj; ?>"
                                     data-current-amount="<?php echo $day['amount']; ?>"
+                                    data-current-status="<?php echo htmlspecialchars($day['status']); ?>"
+                                    data-current-other="<?php echo htmlspecialchars($day['other_text'] ?? ''); ?>"
                                     onclick="makeEditable(this)">
                                     <?php echo $display; ?>
                                 </td>
@@ -344,66 +348,152 @@ if (isset($_GET['ajax'])) {
     </div>
 </div>
 
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-success" role="status" aria-hidden="true"></div>
+                <div class="mt-3 fw-semibold">Updating...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 let isEditing = false;
 const startOfWeek = '<?php echo $startOfWeek; ?>';
+let loadingModalInstance = null;
+let isManualUpdateInFlight = false;
+
+function getLoadingModal() {
+    if (loadingModalInstance) return loadingModalInstance;
+    const el = document.getElementById('loadingModal');
+    if (!el || typeof bootstrap === 'undefined' || !bootstrap.Modal) return null;
+    loadingModalInstance = bootstrap.Modal.getOrCreateInstance(el, { backdrop: 'static', keyboard: false });
+    return loadingModalInstance;
+}
+
+function showLoading() {
+    const m = getLoadingModal();
+    if (m) m.show();
+}
+
+function hideLoading() {
+    const m = getLoadingModal();
+    if (m) m.hide();
+}
+
+function setOthersVisibility(selectEl, otherInputEl) {
+    if (!selectEl || !otherInputEl) return;
+    const show = (selectEl.value === 'Others');
+    otherInputEl.style.display = show ? '' : 'none';
+}
 
 function makeEditable(cell) {
-    if (cell.querySelector('input')) return;
-    isEditing = true;
+	if (cell.querySelector('input') || cell.querySelector('select')) return;
+	isEditing = true;
 
-    const originalContent = cell.innerHTML;
-    const empId = cell.getAttribute('data-employee-id');
-    const date = cell.getAttribute('data-date');
-    const currentAmount = cell.getAttribute('data-current-amount');
+	const originalContent = cell.innerHTML;
+	const empId = cell.getAttribute('data-employee-id');
+	const date = cell.getAttribute('data-date');
+	const currentAmount = cell.getAttribute('data-current-amount') ?? '0';
+	const currentStatus = cell.getAttribute('data-current-status') || 'Regular';
+	const currentOther = cell.getAttribute('data-current-other') || '';
 
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.step = '0.01';
-    input.className = 'form-control form-control-sm edit-input';
-    input.value = currentAmount;
-    
-    cell.innerHTML = '';
-    cell.appendChild(input);
-    input.focus();
-    input.select();
+	const wrapper = document.createElement('div');
+	wrapper.className = 'd-flex flex-column gap-1';
+
+	const input = document.createElement('input');
+	input.type = 'number';
+	input.step = '0.01';
+	input.className = 'form-control form-control-sm edit-input';
+	input.value = currentAmount;
+
+	const select = document.createElement('select');
+	select.className = 'form-select form-select-sm';
+	select.innerHTML = `
+		<option value="Regular">None</option>
+		<option value="Training">Training</option>
+		<option value="Leave">Leave</option>
+		<option value="Sick">Sick</option>
+		<option value="Others">Others</option>
+	`;
+	select.value = currentStatus || 'Regular';
+
+	const otherInput = document.createElement('input');
+	otherInput.type = 'text';
+	otherInput.className = 'form-control form-control-sm';
+	otherInput.placeholder = 'Specify...';
+	otherInput.value = currentOther;
+	setOthersVisibility(select, otherInput);
+	select.addEventListener('change', () => setOthersVisibility(select, otherInput));
+	
+	cell.innerHTML = '';
+	wrapper.appendChild(input);
+	wrapper.appendChild(select);
+	wrapper.appendChild(otherInput);
+	cell.appendChild(wrapper);
+	input.focus();
+	input.select();
 
     // Prevent click propagation to avoid re-triggering
-    input.onclick = function(e) {
-        e.stopPropagation();
-    };
+    [input, select, otherInput].forEach((el) => {
+        el.onclick = function(e) {
+            e.stopPropagation();
+        };
+    });
 
     let isSaving = false;
 
-    input.onblur = function() {
+    function saveOrRevertIfNeeded() {
         if (isSaving) return;
-        if (input.value === currentAmount) {
+        const nextAmount = input.value;
+        const nextStatus = select.value;
+        const nextOther = (otherInput.value || '').trim();
+        const changed = (String(nextAmount) !== String(currentAmount)) || (String(nextStatus) !== String(currentStatus)) || (String(nextOther) !== String(currentOther));
+        if (!changed) {
             cell.innerHTML = originalContent;
             isEditing = false;
             return;
         }
         isSaving = true;
-        saveEdit(cell, empId, date, input.value, originalContent);
-    };
+        saveEdit(cell, empId, date, nextAmount, nextStatus, nextOther, originalContent);
+    }
 
-    input.onkeydown = function(e) {
-        if (e.key === 'Enter') {
-            input.blur();
-        }
-        if (e.key === 'Escape') {
-            isSaving = true; // Prevent blur from saving
-            cell.innerHTML = originalContent;
-            isEditing = false;
-        }
-    };
+	cell.addEventListener('focusout', function() {
+		setTimeout(() => {
+			if (cell.contains(document.activeElement)) return;
+			saveOrRevertIfNeeded();
+		}, 0);
+	}, { once: true });
+
+	[input, select, otherInput].forEach((el) => {
+		el.onkeydown = function(e) {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				saveOrRevertIfNeeded();
+			}
+			if (e.key === 'Escape') {
+				isSaving = true;
+				cell.innerHTML = originalContent;
+				isEditing = false;
+			}
+		};
+	});
 }
 
-function saveEdit(cell, empId, date, newAmount, originalContent) {
-    const formData = new URLSearchParams();
-    formData.append('employee_id', empId);
-    formData.append('date', date);
-    formData.append('amount', newAmount);
+function saveEdit(cell, empId, date, newAmount, newStatus, newOther, originalContent) {
+	const formData = new URLSearchParams();
+	formData.append('employee_id', empId);
+	formData.append('date', date);
+	formData.append('amount', newAmount);
+	formData.append('status', newStatus);
+	formData.append('other_status_text', newOther);
+
+	isManualUpdateInFlight = true;
+	showLoading();
 
     fetch('update_profit.php', {
         method: 'POST',
@@ -415,12 +505,21 @@ function saveEdit(cell, empId, date, newAmount, originalContent) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            refreshData(); // Immediate refresh after save
             isEditing = false;
+            refreshData(true)
+                .then(() => {
+                    
+                })
+                .finally(() => {
+                    isManualUpdateInFlight = false;
+                    hideLoading();
+                });
         } else {
             alert('Error updating: ' + data.message);
             cell.innerHTML = originalContent;
             isEditing = false;
+			isManualUpdateInFlight = false;
+			hideLoading();
         }
     })
     .catch(error => {
@@ -428,13 +527,21 @@ function saveEdit(cell, empId, date, newAmount, originalContent) {
         alert('An error occurred.');
         cell.innerHTML = originalContent;
         isEditing = false;
+		isManualUpdateInFlight = false;
+		hideLoading();
     });
 }
 
-function refreshData() {
-    if (isEditing) return; // Don't refresh while user is typing
+function refreshData(fromManualSave = false) {
+    if (isEditing) return Promise.resolve(); // Don't refresh while user is typing
 
-    fetch(`weekly_report.php?start=${startOfWeek}&ajax=1`)
+    // Only show loading for manual saves, not for the 3s polling refresh.
+    if (fromManualSave && !isManualUpdateInFlight) {
+        isManualUpdateInFlight = true;
+        showLoading();
+    }
+
+    return fetch(`weekly_report.php?start=${startOfWeek}&ajax=1`)
         .then(response => response.text())
         .then(html => {
             const container = document.getElementById('report-container');
@@ -445,7 +552,13 @@ function refreshData() {
                 container.innerHTML = html;
             }
         })
-        .catch(err => console.error('Refresh error:', err));
+		.catch(err => console.error('Refresh error:', err))
+		.finally(() => {
+			if (fromManualSave) {
+				isManualUpdateInFlight = false;
+				hideLoading();
+			}
+		});
 }
 
 // Start polling

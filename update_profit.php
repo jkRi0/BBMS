@@ -12,6 +12,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $employee_id = $_POST['employee_id'] ?? null;
     $date = $_POST['date'] ?? null;
     $amount = $_POST['amount'] ?? 0;
+    $status = $_POST['status'] ?? 'Regular';
+    $other_status_text = $_POST['other_status_text'] ?? null;
+
+    $status = is_string($status) ? trim($status) : 'Regular';
+    if ($status === '' || strtolower($status) === 'none') {
+        $status = 'Regular';
+    }
+    $other_status_text = is_string($other_status_text) ? trim($other_status_text) : null;
+    if ($status !== 'Others') {
+        $other_status_text = null;
+    }
 
     if ($employee_id && $date) {
         try {
@@ -21,19 +32,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$employee_id, $date]);
             $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
+            $normalizedAmount = is_numeric($amount) ? (float)$amount : 0.0;
+            $isBlank = ($normalizedAmount == 0.0 && $status === 'Regular' && ($other_status_text === null || $other_status_text === ''));
+
             if ($existing) {
-                // Update existing record using amount column
-                $stmt = $pdo->prepare("UPDATE profits SET amount = ? WHERE id = ?");
-                $stmt->execute([$amount, $existing['id']]);
+                if ($isBlank) {
+                    $stmt = $pdo->prepare("DELETE FROM profits WHERE id = ?");
+                    $stmt->execute([$existing['id']]);
+                } else {
+                    // Update existing record
+                    $stmt = $pdo->prepare("UPDATE profits SET amount = ?, status = ?, other_status_text = ? WHERE id = ?");
+                    $stmt->execute([$normalizedAmount, $status, $other_status_text, $existing['id']]);
+                }
             } else {
-                // Insert new record
-                // Set time to midday to avoid timezone edge cases
-                $dateTime = $date . ' 12:00:00';
-                $stmt = $pdo->prepare("INSERT INTO profits (employee_id, amount, profit_date, status) VALUES (?, ?, ?, 'Regular')");
-                $stmt->execute([$employee_id, $amount, $dateTime]);
+                if (!$isBlank) {
+                    // Insert new record
+                    // Set time to midday to avoid timezone edge cases
+                    $dateTime = $date . ' 12:00:00';
+                    $stmt = $pdo->prepare("INSERT INTO profits (employee_id, amount, profit_date, status, other_status_text) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->execute([$employee_id, $normalizedAmount, $dateTime, $status, $other_status_text]);
+                }
             }
 
-            error_log("BBMS Update: Saved amount $amount for emp $employee_id on $date");
+            error_log("BBMS Update: Saved amount $normalizedAmount / status $status for emp $employee_id on $date");
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
             error_log("BBMS Error: " . $e->getMessage());
