@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_profit'])) {
 }
 
 // Fetch employees for dropdown
-$employees = $pdo->query("SELECT id, name FROM employees ORDER BY name ASC")->fetchAll();
+$employees = $pdo->query("SELECT id, name FROM employees WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">

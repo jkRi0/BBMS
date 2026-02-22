@@ -35,12 +35,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_employee'])) {
 if (isset($_GET['delete_emp'])) {
     $id = $_GET['delete_emp'];
     try {
+        $check = $pdo->prepare("SELECT COUNT(*) FROM profits WHERE employee_id = ?");
+        $check->execute([$id]);
+        $hasProfits = ((int)$check->fetchColumn()) > 0;
+
+        if ($hasProfits) {
+            $softName = "Deleted Employee #" . $id;
+            $stmt = $pdo->prepare("UPDATE employees SET name = ?, assigned_place = NULL, is_active = 0 WHERE id = ?");
+            $stmt->execute([$softName, $id]);
+            header("Location: manage_employees.php?msg=archived");
+            exit;
+        }
+
         $stmt = $pdo->prepare("DELETE FROM employees WHERE id = ?");
         $stmt->execute([$id]);
         header("Location: manage_employees.php?msg=deleted");
         exit;
     } catch (PDOException $e) {
-        $message = "<div class='alert alert-danger'>Cannot delete employee. They might have profit records.</div>";
+        $message = "<div class='alert alert-danger'>Cannot delete employee.</div>";
     }
 }
 
@@ -56,11 +68,11 @@ $allowed_orders = ['ASC', 'DESC'];
 if (!in_array($sort, $allowed_sorts)) $sort = 'id';
 if (!in_array($order, $allowed_orders)) $order = 'ASC';
 
-$query = "SELECT * FROM employees";
+$query = "SELECT * FROM employees WHERE is_active = 1";
 $params = [];
 
 if (!empty($search)) {
-    $query .= " WHERE id LIKE ? OR name LIKE ? OR assigned_place LIKE ?";
+    $query .= " AND (id LIKE ? OR name LIKE ? OR assigned_place LIKE ?)";
     $searchTerm = "%$search%";
     $params = [$searchTerm, $searchTerm, $searchTerm];
 }

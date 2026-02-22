@@ -33,6 +33,7 @@ $sql = "CREATE TABLE IF NOT EXISTS employees (
     id INT(11) AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     assigned_place VARCHAR(255) DEFAULT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 $conn->query($sql);
@@ -41,6 +42,12 @@ $conn->query($sql);
 $checkColumn = $conn->query("SHOW COLUMNS FROM employees LIKE 'assigned_place'");
 if ($checkColumn->num_rows == 0) {
     $conn->query("ALTER TABLE employees ADD COLUMN assigned_place VARCHAR(255) DEFAULT NULL AFTER name");
+}
+
+// Check if is_active column exists, if not add it (for existing databases)
+$checkActiveColumn = $conn->query("SHOW COLUMNS FROM employees LIKE 'is_active'");
+if ($checkActiveColumn->num_rows == 0) {
+    $conn->query("ALTER TABLE employees ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER assigned_place");
 }
 
 // Create profits table
