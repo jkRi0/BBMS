@@ -51,6 +51,17 @@ $stmt = $pdo->prepare("SELECT employee_id, amount, status, other_status_text, pr
 $stmt->execute([$startOfWeek, $endOfWeek]);
 $profits = $stmt->fetchAll();
 
+// Fetch claims for the specific week
+$claims_stmt = $pdo->prepare("SELECT employee_id, claim_date FROM claims WHERE claim_date >= ? AND claim_date <= ?");
+$claims_stmt->execute([$startOfWeek, $endOfWeek]);
+$claimed_map = [];
+foreach ($claims_stmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+    $eid = (int)$c['employee_id'];
+    $d = $c['claim_date'];
+    if (!isset($claimed_map[$eid])) $claimed_map[$eid] = [];
+    $claimed_map[$eid][$d] = true;
+}
+
 foreach ($profits as $p) {
     if (isset($employee_data[$p['employee_id']])) {
         // Calculate day index (1=Sunday, 2=Monday, ..., 7=Saturday)
@@ -131,13 +142,15 @@ if (isset($_GET['ajax'])) {
                             }
                         }
                     ?>
-                        <td class="<?php echo $class; ?> editable-cell" 
+                        <?php $is_claimed = isset($claimed_map[(int)$emp_id]) && isset($claimed_map[(int)$emp_id][$current_date_obj]); ?>
+                        <td class="<?php echo $class; ?> editable-cell<?php echo $is_claimed ? ' claimed-cell' : ''; ?>" 
                             data-employee-id="<?php echo $emp_id; ?>" 
                             data-date="<?php echo $current_date_obj; ?>"
+                            data-claimed="<?php echo $is_claimed ? '1' : '0'; ?>"
                             data-current-amount="<?php echo $day['amount']; ?>"
                             data-current-status="<?php echo htmlspecialchars($day['status']); ?>"
                             data-current-other="<?php echo htmlspecialchars($day['other_text'] ?? ''); ?>"
-                            onclick="makeEditable(this)">
+                            onclick="handleCellClick(this)">
                             <?php echo $display; ?>
                         </td>
                     <?php endfor; ?>
@@ -195,6 +208,9 @@ if (isset($_GET['ajax'])) {
         }
         .editable-cell { cursor: pointer; transition: background 0.2s; position: relative; min-width: 100px; }
         .editable-cell:hover { background-color: #f8f9fa !important; }
+        .claimed-cell { background-color: #b7e1cd !important; }
+        .editable-cell.claimed-cell:hover { background-color: #8fd1b2 !important; }
+        .editable-cell.claimed-cell { box-shadow: inset 0 0 0 1px rgba(25, 135, 84, 0.35); }
         .edit-input { 
             width: 100%; 
             min-width: 60px;
@@ -232,6 +248,15 @@ if (isset($_GET['ajax'])) {
             .table-responsive {
                 overflow: visible !important;
             }
+
+            /* Force background colors to print (browser may omit by default) */
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .claimed-cell {
+                background-color: #b7e1cd !important;
+            }
         }
     </style>
 </head>
@@ -256,6 +281,12 @@ if (isset($_GET['ajax'])) {
     <div class="mb-4">
         <h2 class="mb-1">Weekly Profit Report</h2>
         <p class="text-muted mb-0">Week of <?php echo date('M d', strtotime($startOfWeek)); ?> - <?php echo date('M d, Y', strtotime($endOfWeek)); ?></p>
+    </div>
+
+    <div class="d-flex justify-content-center justify-content-md-end gap-2 mb-3">
+        <button type="button" id="claimModeBtn" class="btn btn-outline-success btn-sm">Claiming</button>
+        <button type="button" id="saveClaimsBtn" class="btn btn-success btn-sm d-none">Save Claims</button>
+        <button type="button" id="cancelClaimsBtn" class="btn btn-outline-secondary btn-sm d-none">Cancel</button>
     </div>
     
     <div class="card p-4 shadow-sm border-0">
@@ -311,13 +342,15 @@ if (isset($_GET['ajax'])) {
                                     }
                                 }
                             ?>
-                                <td class="<?php echo $class; ?> editable-cell" 
+                                <?php $is_claimed = isset($claimed_map[(int)$emp_id]) && isset($claimed_map[(int)$emp_id][$current_date_obj]); ?>
+                                <td class="<?php echo $class; ?> editable-cell<?php echo $is_claimed ? ' claimed-cell' : ''; ?>" 
                                     data-employee-id="<?php echo $emp_id; ?>" 
                                     data-date="<?php echo $current_date_obj; ?>"
+                                    data-claimed="<?php echo $is_claimed ? '1' : '0'; ?>"
                                     data-current-amount="<?php echo $day['amount']; ?>"
                                     data-current-status="<?php echo htmlspecialchars($day['status']); ?>"
                                     data-current-other="<?php echo htmlspecialchars($day['other_text'] ?? ''); ?>"
-                                    onclick="makeEditable(this)">
+                                    onclick="handleCellClick(this)">
                                     <?php echo $display; ?>
                                 </td>
                             <?php endfor; ?>
@@ -366,6 +399,9 @@ let isEditing = false;
 const startOfWeek = '<?php echo $startOfWeek; ?>';
 let loadingModalInstance = null;
 let isManualUpdateInFlight = false;
+let isClaimingMode = false;
+let claimChanges = new Map();
+let pollIntervalId = null;
 
 function getLoadingModal() {
     if (loadingModalInstance) return loadingModalInstance;
@@ -393,6 +429,7 @@ function setOthersVisibility(selectEl, otherInputEl) {
 
 function makeEditable(cell) {
 	if (cell.querySelector('input') || cell.querySelector('select')) return;
+	if (isClaimingMode) return;
 	isEditing = true;
 
 	const originalContent = cell.innerHTML;
@@ -484,6 +521,22 @@ function makeEditable(cell) {
 	});
 }
 
+function handleCellClick(cell) {
+    if (!cell) return;
+    if (isClaimingMode) {
+        const empId = cell.getAttribute('data-employee-id');
+        const date = cell.getAttribute('data-date');
+        const key = `${empId}|${date}`;
+        const currentlyClaimed = (cell.getAttribute('data-claimed') === '1');
+        const nextClaimed = !currentlyClaimed;
+        cell.setAttribute('data-claimed', nextClaimed ? '1' : '0');
+        cell.classList.toggle('claimed-cell', nextClaimed);
+        claimChanges.set(key, nextClaimed);
+        return;
+    }
+    makeEditable(cell);
+}
+
 function saveEdit(cell, empId, date, newAmount, newStatus, newOther, originalContent) {
 	const formData = new URLSearchParams();
 	formData.append('employee_id', empId);
@@ -534,6 +587,12 @@ function saveEdit(cell, empId, date, newAmount, newStatus, newOther, originalCon
 
 function refreshData(fromManualSave = false) {
     if (isEditing) return Promise.resolve(); // Don't refresh while user is typing
+    if (isClaimingMode) return Promise.resolve(); // Don't refresh while claiming to avoid losing selections
+
+    const container = document.getElementById('report-container');
+    const prevScrollWrapper = container ? container.querySelector('.table-responsive') : null;
+    const prevScrollLeft = prevScrollWrapper ? prevScrollWrapper.scrollLeft : 0;
+    const prevScrollTop = prevScrollWrapper ? prevScrollWrapper.scrollTop : 0;
 
     // Only show loading for manual saves, not for the 3s polling refresh.
     if (fromManualSave && !isManualUpdateInFlight) {
@@ -544,12 +603,20 @@ function refreshData(fromManualSave = false) {
     return fetch(`weekly_report.php?start=${startOfWeek}&ajax=1`)
         .then(response => response.text())
         .then(html => {
-            const container = document.getElementById('report-container');
             if (!container) return; // Safety check
 
             // Only update if content changed to avoid flicker
             if (container.innerHTML !== html) {
                 container.innerHTML = html;
+
+                // Restore scroll position (mobile horizontal scroll reset fix)
+                const newScrollWrapper = container.querySelector('.table-responsive');
+                if (newScrollWrapper) {
+                    requestAnimationFrame(() => {
+                        newScrollWrapper.scrollLeft = prevScrollLeft;
+                        newScrollWrapper.scrollTop = prevScrollTop;
+                    });
+                }
             }
         })
 		.catch(err => console.error('Refresh error:', err))
@@ -561,8 +628,97 @@ function refreshData(fromManualSave = false) {
 		});
 }
 
-// Start polling
-setInterval(refreshData, 3000);
+function startPolling() {
+    stopPolling();
+    pollIntervalId = setInterval(refreshData, 3000);
+}
+
+function stopPolling() {
+    if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+    }
+}
+
+function setClaimMode(enabled) {
+    isClaimingMode = enabled;
+    const claimModeBtn = document.getElementById('claimModeBtn');
+    const saveClaimsBtn = document.getElementById('saveClaimsBtn');
+    const cancelClaimsBtn = document.getElementById('cancelClaimsBtn');
+
+    if (claimModeBtn) {
+        claimModeBtn.classList.toggle('btn-success', enabled);
+        claimModeBtn.classList.toggle('btn-outline-success', !enabled);
+    }
+    if (saveClaimsBtn) saveClaimsBtn.classList.toggle('d-none', !enabled);
+    if (cancelClaimsBtn) cancelClaimsBtn.classList.toggle('d-none', !enabled);
+
+    if (enabled) {
+        stopPolling();
+    } else {
+        claimChanges = new Map();
+        startPolling();
+    }
+}
+
+function saveClaims() {
+    if (claimChanges.size === 0) {
+        setClaimMode(false);
+        return;
+    }
+
+    const changes = [];
+    for (const [key, claimed] of claimChanges.entries()) {
+        const parts = key.split('|');
+        if (parts.length !== 2) continue;
+        changes.push({ employee_id: parts[0], date: parts[1], claimed });
+    }
+
+    showLoading();
+    fetch('update_claims.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data || !data.success) {
+            alert('Error saving claims.');
+            return;
+        }
+        claimChanges = new Map();
+        setClaimMode(false);
+        return refreshData(true);
+    })
+    .catch(err => {
+        console.error('Save claims error:', err);
+        alert('An error occurred.');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const claimModeBtn = document.getElementById('claimModeBtn');
+    const saveClaimsBtn = document.getElementById('saveClaimsBtn');
+    const cancelClaimsBtn = document.getElementById('cancelClaimsBtn');
+
+    if (claimModeBtn) {
+        claimModeBtn.addEventListener('click', () => setClaimMode(!isClaimingMode));
+    }
+    if (saveClaimsBtn) {
+        saveClaimsBtn.addEventListener('click', saveClaims);
+    }
+    if (cancelClaimsBtn) {
+        cancelClaimsBtn.addEventListener('click', () => {
+            setClaimMode(false);
+            refreshData(true);
+        });
+    }
+
+    startPolling();
+});
 </script>
 </body>
 </html>

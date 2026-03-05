@@ -61,6 +61,17 @@ $sql = "CREATE TABLE IF NOT EXISTS profits (
 )";
 $conn->query($sql);
 
+// Create claims table (tracks claimed days per employee)
+$sql = "CREATE TABLE IF NOT EXISTS claims (
+    id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT(11) NOT NULL,
+    claim_date DATE NOT NULL,
+    claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_employee_date (employee_id, claim_date),
+    CONSTRAINT claims_employee_fk FOREIGN KEY (employee_id) REFERENCES employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
+$conn->query($sql);
+
 // Global connection variable for other files
 $pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
