@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 18, 2026 at 02:08 AM
+-- Generation Time: Mar 06, 2026 at 01:21 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -43,6 +43,28 @@ INSERT INTO `admin` (`id`, `username`, `password`) VALUES
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `claims`
+--
+
+CREATE TABLE `claims` (
+  `id` int(11) NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `claim_date` date NOT NULL,
+  `claimed_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `claims`
+--
+
+INSERT INTO `claims` (`id`, `employee_id`, `claim_date`, `claimed_at`) VALUES
+(8, 17, '2026-03-01', '2026-03-05 15:33:44'),
+(9, 24, '2026-03-03', '2026-03-05 15:36:20'),
+(10, 24, '2026-03-02', '2026-03-05 15:36:20');
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `employees`
 --
 
@@ -50,6 +72,7 @@ CREATE TABLE `employees` (
   `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
   `assigned_place` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -57,22 +80,11 @@ CREATE TABLE `employees` (
 -- Dumping data for table `employees`
 --
 
-INSERT INTO `employees` (`id`, `name`, `assigned_place`, `created_at`) VALUES
-(1, 'John Doe', 'Manila Branch', '2026-02-17 08:18:03'),
-(2, 'Jane Smith', 'Cebu Branch', '2026-02-17 08:18:03'),
-(3, 'Michael Brown', 'Davao Branch', '2026-02-17 08:18:03'),
-(4, 'Emily Davis', 'Quezon City', '2026-02-17 08:18:03'),
-(5, 'Chris Wilson', 'Makati Office', '2026-02-17 08:18:03'),
-(6, 'Sarah Miller', 'Taguig Office', '2026-02-17 08:18:03'),
-(7, 'David Taylor', 'Pasig Warehouse', '2026-02-17 08:18:03'),
-(8, 'Jessica Moore', 'Ortigas Hub', '2026-02-17 08:18:03'),
-(9, 'Kevin Anderson', 'Alabang Branch', '2026-02-17 08:18:03'),
-(10, 'Laura Thomas', 'Baguio Office', '2026-02-17 08:18:03'),
-(11, 'Robert Garcia', 'Batangas Hub', '2026-02-17 08:18:03'),
-(12, 'Maria Santos', 'Laguna Branch', '2026-02-17 08:18:03'),
-(13, 'William Lopez', 'Cavite Office', '2026-02-17 08:18:03'),
-(14, 'Linda Perez', 'Pampanga Warehouse', '2026-02-17 08:18:03'),
-(15, 'James Cruz', 'Bulacan Office', '2026-02-17 08:18:03');
+INSERT INTO `employees` (`id`, `name`, `assigned_place`, `is_active`, `created_at`) VALUES
+(17, 'Deleted Employee #17', NULL, 0, '2026-03-05 10:16:52'),
+(23, 'Deleted Employee #23', NULL, 0, '2026-03-05 15:34:14'),
+(24, 'Deleted Employee #24', NULL, 0, '2026-03-05 15:34:18'),
+(25, 'Deleted Employee #25', NULL, 0, '2026-03-05 15:34:23');
 
 -- --------------------------------------------------------
 
@@ -99,23 +111,10 @@ CREATE TABLE `profits` (
 --
 
 INSERT INTO `profits` (`id`, `employee_id`, `profit_date`, `amount`, `is_training`, `submitted_at`, `status`, `other_status_text`, `session_id`, `latitude`, `longitude`) VALUES
-(331, 4, '2026-02-17', 1000.00, 0, '2026-02-17 10:25:51', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(333, 10, '2026-02-17', 0.00, 0, '2026-02-17 10:26:33', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(334, 9, '2026-02-17', 0.00, 0, '2026-02-17 10:26:38', 'Leave', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(335, 14, '2026-02-17', 0.00, 0, '2026-02-17 10:26:43', 'Sick', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(336, 11, '2026-02-17', 0.00, 0, '2026-02-17 10:26:53', 'Others', 'ewasm', 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(338, 8, '2026-02-17', 1000.00, 0, '2026-02-17 10:27:26', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(342, 15, '2026-02-17', 12345.00, 0, '2026-02-17 10:48:08', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(344, 5, '2026-02-16', 100.00, 0, '2026-02-17 10:57:52', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', 14.2668364, 121.1554307),
-(346, 5, '2026-02-19', 69.00, 0, '2026-02-17 11:02:12', 'Regular', NULL, NULL, NULL, NULL),
-(347, 3, '2026-02-17', 100.00, 0, '2026-02-17 11:49:02', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(348, 13, '2026-02-17', 15.00, 0, '2026-02-17 11:55:25', 'Regular', NULL, 'vq7cirgl4cf1pt39eh1uhcfis2', NULL, NULL),
-(350, 7, '2026-02-17', 111.00, 0, '2026-02-17 14:00:07', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2668364, 121.1554307),
-(354, 5, '2026-02-17', 50.00, 0, '2026-02-17 22:50:02', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2668541, 121.1554532),
-(358, 5, '2026-02-18', 10.00, 0, '2026-02-18 00:06:39', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', NULL, NULL),
-(361, 7, '2026-02-18', 10000.00, 0, '2026-02-18 00:27:43', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2535972, 121.1400728),
-(362, 1, '2026-02-18', 900.00, 0, '2026-02-18 00:45:17', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2535943, 121.1400720),
-(363, 4, '2026-02-18', 5000.00, 0, '2026-02-18 00:58:04', 'Regular', NULL, 'r4ad19npkg9gqupnit43fnoe4a', 14.2536003, 121.1400774);
+(373, 17, '2026-03-01', 89.00, 0, '2026-03-05 12:50:24', 'Regular', NULL, NULL, NULL, NULL),
+(374, 23, '2026-03-01', 100.00, 0, '2026-03-05 15:34:37', 'Regular', NULL, NULL, NULL, NULL),
+(375, 25, '2026-03-01', 3000.00, 0, '2026-03-05 15:34:41', 'Regular', NULL, NULL, NULL, NULL),
+(376, 24, '2026-03-02', 400.00, 0, '2026-03-05 15:34:45', 'Regular', NULL, NULL, NULL, NULL);
 
 --
 -- Indexes for dumped tables
@@ -127,6 +126,13 @@ INSERT INTO `profits` (`id`, `employee_id`, `profit_date`, `amount`, `is_trainin
 ALTER TABLE `admin`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `username` (`username`);
+
+--
+-- Indexes for table `claims`
+--
+ALTER TABLE `claims`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_employee_date` (`employee_id`,`claim_date`);
 
 --
 -- Indexes for table `employees`
@@ -152,20 +158,32 @@ ALTER TABLE `admin`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
+-- AUTO_INCREMENT for table `claims`
+--
+ALTER TABLE `claims`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+
+--
 -- AUTO_INCREMENT for table `employees`
 --
 ALTER TABLE `employees`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `profits`
 --
 ALTER TABLE `profits`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=364;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=377;
 
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `claims`
+--
+ALTER TABLE `claims`
+  ADD CONSTRAINT `claims_employee_fk` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`id`);
 
 --
 -- Constraints for table `profits`

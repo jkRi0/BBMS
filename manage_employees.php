@@ -8,6 +8,9 @@ require_once 'db.php';
 
 $message = "";
 
+$showDeleted = (isset($_GET['show_deleted']) && $_GET['show_deleted'] === '1');
+$showDeletedQs = $showDeleted ? '&show_deleted=1' : '';
+
 // Handle employee addition
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_employee'])) {
     $name = $_POST['employee_name'];
@@ -28,6 +31,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_employee'])) {
         $stmt = $pdo->prepare("UPDATE employees SET name = ?, assigned_place = ? WHERE id = ?");
         $stmt->execute([$name, $place, $id]);
         $message = "<div class='alert alert-success'>Employee updated successfully!</div>";
+    }
+}
+
+// Handle permanently removing deleted employee (and all related records)
+if (isset($_GET['remove_emp'])) {
+    $id = $_GET['remove_emp'];
+    try {
+        $isActiveStmt = $pdo->prepare("SELECT is_active FROM employees WHERE id = ?");
+        $isActiveStmt->execute([$id]);
+        $row = $isActiveStmt->fetch(PDO::FETCH_ASSOC);
+        $isActive = $row ? (int)$row['is_active'] : 1;
+
+        if ($isActive !== 0) {
+            $message = "<div class='alert alert-danger'>This account is not marked as deleted.</div>";
+        } else {
+            $pdo->beginTransaction();
+
+            $delProfits = $pdo->prepare("DELETE FROM profits WHERE employee_id = ?");
+            $delProfits->execute([$id]);
+
+            $delClaims = $pdo->prepare("DELETE FROM claims WHERE employee_id = ?");
+            $delClaims->execute([$id]);
+
+            $delEmp = $pdo->prepare("DELETE FROM employees WHERE id = ?");
+            $delEmp->execute([$id]);
+
+            $pdo->commit();
+            header("Location: manage_employees.php?show_deleted=1&msg=removed");
+            exit;
+        }
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $message = "<div class='alert alert-danger'>Cannot remove employee.</div>";
     }
 }
 
@@ -68,7 +106,7 @@ $allowed_orders = ['ASC', 'DESC'];
 if (!in_array($sort, $allowed_sorts)) $sort = 'id';
 if (!in_array($order, $allowed_orders)) $order = 'ASC';
 
-$query = "SELECT * FROM employees WHERE is_active = 1";
+$query = "SELECT * FROM employees WHERE is_active = " . ($showDeleted ? "0" : "1");
 $params = [];
 
 if (!empty($search)) {
@@ -98,6 +136,7 @@ if (isset($_GET['ajax'])) {
                 <a href="view_employee_records.php?id=<?php echo $emp['id']; ?>" class="btn btn-info btn-sm text-white">
                     <i class="bi bi-eye"></i> <span class="action-text">View</span>
                 </a>
+                <?php if (!$showDeleted): ?>
                 <button class="btn btn-warning btn-sm edit-btn" 
                         data-id="<?php echo $emp['id']; ?>" 
                         data-name="<?php echo htmlspecialchars($emp['name']); ?>" 
@@ -106,9 +145,16 @@ if (isset($_GET['ajax'])) {
                         data-bs-target="#editEmployeeModal">
                     <i class="bi bi-pencil"></i> <span class="action-text">Edit</span>
                 </button>
-                <a href="?delete_emp=<?php echo $emp['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">
-                    <i class="bi bi-trash"></i> <span class="action-text">Delete</span>
-                </a>
+                <?php endif; ?>
+                <?php if ($showDeleted): ?>
+                    <a href="?remove_emp=<?php echo $emp['id']; ?>&show_deleted=1" class="btn btn-danger btn-sm" onclick="return confirm('Remove this deleted account and ALL its records? This cannot be undone.')">
+                        <i class="bi bi-trash"></i> <span class="action-text">Remove</span>
+                    </a>
+                <?php else: ?>
+                    <a href="?delete_emp=<?php echo $emp['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure, you want to delete?')">
+                        <i class="bi bi-trash"></i> <span class="action-text">Delete</span>
+                    </a>
+                <?php endif; ?>
             </td>
         </tr>
         <?php endforeach; ?>
@@ -186,6 +232,18 @@ if (isset($_GET['ajax'])) {
             <div class="col-md-2 d-grid">
                 <button type="submit" class="btn btn-secondary">Search</button>
             </div>
+            <div class="col-12">
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="show_deleted" id="showActiveRadio" value="0" <?php echo !$showDeleted ? 'checked' : ''; ?> onchange="this.form.submit();">
+                        <label class="form-check-label" for="showActiveRadio">Active Accounts</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="show_deleted" id="showDeletedRadio" value="1" <?php echo $showDeleted ? 'checked' : ''; ?> onchange="this.form.submit();">
+                        <label class="form-check-label" for="showDeletedRadio">Deleted Accounts</label>
+                    </div>
+                </div>
+            </div>
         </form>
     </div>
 
@@ -194,17 +252,17 @@ if (isset($_GET['ajax'])) {
             <thead class="table-success text-dark">
                 <tr>
                     <th class="text-dark">
-                        <a href="?search=<?php echo urlencode($search); ?>&sort=id&order=<?php echo ($sort == 'id') ? $next_order : 'ASC'; ?>" class="sort-link text-dark">
+                        <a href="?search=<?php echo urlencode($search); ?>&sort=id&order=<?php echo ($sort == 'id') ? $next_order : 'ASC'; ?><?php echo $showDeletedQs; ?>" class="sort-link text-dark">
                             ID <?php echo ($sort == 'id') ? ($order == 'ASC' ? '↑' : '↓') : ''; ?>
                         </a>
                     </th>
                     <th class="text-dark">
-                        <a href="?search=<?php echo urlencode($search); ?>&sort=name&order=<?php echo ($sort == 'name') ? $next_order : 'ASC'; ?>" class="sort-link text-dark">
+                        <a href="?search=<?php echo urlencode($search); ?>&sort=name&order=<?php echo ($sort == 'name') ? $next_order : 'ASC'; ?><?php echo $showDeletedQs; ?>" class="sort-link text-dark">
                             Name <?php echo ($sort == 'name') ? ($order == 'ASC' ? '↑' : '↓') : ''; ?>
                         </a>
                     </th>
                     <th class="text-dark">
-                        <a href="?search=<?php echo urlencode($search); ?>&sort=assigned_place&order=<?php echo ($sort == 'assigned_place') ? $next_order : 'ASC'; ?>" class="sort-link text-dark">
+                        <a href="?search=<?php echo urlencode($search); ?>&sort=assigned_place&order=<?php echo ($sort == 'assigned_place') ? $next_order : 'ASC'; ?><?php echo $showDeletedQs; ?>" class="sort-link text-dark">
                             Assigned Place <?php echo ($sort == 'assigned_place') ? ($order == 'ASC' ? '↑' : '↓') : ''; ?>
                         </a>
                     </th>
@@ -222,6 +280,7 @@ if (isset($_GET['ajax'])) {
                             <a href="view_employee_records.php?id=<?php echo $emp['id']; ?>" class="btn btn-info btn-sm text-white">
                                 <i class="bi bi-eye"></i> <span class="action-text">View</span>
                             </a>
+                            <?php if (!$showDeleted): ?>
                             <button class="btn btn-warning btn-sm edit-btn" 
                                     data-id="<?php echo $emp['id']; ?>" 
                                     data-name="<?php echo htmlspecialchars($emp['name']); ?>" 
@@ -230,9 +289,16 @@ if (isset($_GET['ajax'])) {
                                     data-bs-target="#editEmployeeModal">
                                 <i class="bi bi-pencil"></i> <span class="action-text">Edit</span>
                             </button>
-                            <a href="?delete_emp=<?php echo $emp['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">
-                                <i class="bi bi-trash"></i> <span class="action-text">Delete</span>
-                            </a>
+                            <?php endif; ?>
+                            <?php if ($showDeleted): ?>
+                                <a href="?remove_emp=<?php echo $emp['id']; ?>&show_deleted=1" class="btn btn-danger btn-sm" onclick="return confirm('Remove this deleted account and ALL its records? This cannot be undone.')">
+                                    <i class="bi bi-trash"></i> <span class="action-text">Remove</span>
+                                </a>
+                            <?php else: ?>
+                                <a href="?delete_emp=<?php echo $emp['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure, you want to delete?')">
+                                    <i class="bi bi-trash"></i> <span class="action-text">Delete</span>
+                                </a>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -452,7 +518,22 @@ function refreshEmployees() {
     const editModal = document.getElementById('editEmployeeModal');
     if (addModal.classList.contains('show') || editModal.classList.contains('show')) return;
 
-    fetch(`manage_employees.php?search=${searchParam}&sort=${sortParam}&order=${orderParam}&ajax=1`)
+    const urlParams = new URLSearchParams(window.location.search);
+    const liveSearch = urlParams.get('search') ?? decodeURIComponent(searchParam);
+    const liveSort = urlParams.get('sort') ?? sortParam;
+    const liveOrder = urlParams.get('order') ?? orderParam;
+    const liveShowDeleted = urlParams.get('show_deleted');
+
+    const ajaxUrl = new URL('manage_employees.php', window.location.href);
+    ajaxUrl.searchParams.set('search', liveSearch);
+    ajaxUrl.searchParams.set('sort', liveSort);
+    ajaxUrl.searchParams.set('order', liveOrder);
+    if (liveShowDeleted !== null) {
+        ajaxUrl.searchParams.set('show_deleted', liveShowDeleted);
+    }
+    ajaxUrl.searchParams.set('ajax', '1');
+
+    fetch(ajaxUrl.toString())
         .then(response => response.text())
         .then(html => {
             const tbody = document.getElementById('employee-table-body');
